@@ -1,6 +1,5 @@
-// =========================
+
 // Seleção de elementos
-// =========================
 const todoForm = document.querySelector("#todo-form");
 const todoInput = document.querySelector("#todo-input");
 const todoList = document.querySelector("#todo-list");
@@ -12,16 +11,33 @@ const cancelEditBtn = document.querySelector("#cancel-edit-btn");
 const searchInput = document.querySelector("#search-input");
 const filterSelect = document.querySelector("#filter-select");
 
-let oldInputValue = "";
+let oldId = "";
 
-// =========================
-// Funções
-// =========================
 
-// Criar novo todo
-const saveTodo = (text) => {
+//Local Storage// 
+
+const getTodosFromLocalStorage = () => {
+    return JSON.parse(localStorage.getItem("todos")) || [];
+};
+
+const saveTodosToLocalStorage = (todos) => {
+    localStorage.setItem("todos", JSON.stringify(todos));
+};
+
+//Funções// 
+const isDuplicate = (text) => {
+    const todos = getTodosFromLocalStorage();
+    return todos.some((t) => t.text.toLowerCase() === text.toLowerCase());
+};
+
+const saveTodo = (text, done = false, save = true, id = Date.now().toString()) => {
     const todo = document.createElement("div");
     todo.classList.add("todo");
+    todo.setAttribute("data-id", id);
+
+    if (done) {
+        todo.classList.add("done");
+    }
 
     const todoTitle = document.createElement("h3");
     todoTitle.innerText = text;
@@ -46,130 +62,135 @@ const saveTodo = (text) => {
 
     todoInput.value = "";
     todoInput.focus();
+
+    if (save) {
+        const todos = getTodosFromLocalStorage();
+        todos.push({ id, text, done });
+        saveTodosToLocalStorage(todos);
+    }
 };
 
-// Alternar formulários
 const toggleForms = () => {
     editForm.classList.toggle("hide");
     todoForm.classList.toggle("hide");
     todoList.classList.toggle("hide");
 };
 
-// Atualizar todo
 const updateTodo = (text) => {
+    const savedTodos = getTodosFromLocalStorage();
+    const index = savedTodos.findIndex((t) => t.id === oldId);
+
+    if (index !== -1) {
+        savedTodos[index].text = text;
+        saveTodosToLocalStorage(savedTodos);
+    }
+
     const todos = document.querySelectorAll(".todo");
-
     todos.forEach((todo) => {
-        const todoTitle = todo.querySelector("h3");
-
-        if (todoTitle.innerText === oldInputValue) {
-            todoTitle.innerText = text;
+        if (todo.getAttribute("data-id") === oldId) {
+            todo.querySelector("h3").innerText = text;
         }
     });
 };
 
-// Pesquisar todos
 const searchTodos = (searchValue) => {
     const todos = document.querySelectorAll(".todo");
-
     todos.forEach((todo) => {
         const title = todo.querySelector("h3").innerText.toLowerCase();
-
-        todo.style.display = title.includes(searchValue.toLowerCase())
-            ? "flex"
-            : "none";
+        todo.style.display = title.includes(searchValue.toLowerCase()) ? "flex" : "none";
     });
 };
 
-// Filtrar todos
 const filterTodos = (filterValue) => {
     const todos = document.querySelectorAll(".todo");
-
     todos.forEach((todo) => {
         switch (filterValue) {
             case "all":
                 todo.style.display = "flex";
                 break;
-
             case "done":
-                todo.classList.contains("done")
-                    ? (todo.style.display = "flex")
-                    : (todo.style.display = "none");
+                todo.style.display = todo.classList.contains("done") ? "flex" : "none";
                 break;
-
             case "todo":
-                !todo.classList.contains("done")
-                    ? (todo.style.display = "flex")
-                    : (todo.style.display = "none");
+                todo.style.display = !todo.classList.contains("done") ? "flex" : "none";
                 break;
         }
     });
 };
 
-// =========================
 // Eventos
-// =========================
 
-// Criar todo
 todoForm.addEventListener("submit", (e) => {
     e.preventDefault();
-
     const inputValue = todoInput.value.trim();
 
     if (inputValue) {
+        if (isDuplicate(inputValue)) {
+            alert("Essa tarefa já existe!");
+            return;
+        }
         saveTodo(inputValue);
     }
 });
 
-// Delegação de eventos
 document.addEventListener("click", (e) => {
     const targetEl = e.target;
     const parentEl = targetEl.closest(".todo");
 
     if (!parentEl) return;
 
-    const todoTitle = parentEl.querySelector("h3").innerText;
+    const todoId = parentEl.getAttribute("data-id");
 
     if (targetEl.classList.contains("finish-todo")) {
         parentEl.classList.toggle("done");
+
+        const savedTodos = getTodosFromLocalStorage();
+        const index = savedTodos.findIndex((t) => t.id === todoId);
+        if (index !== -1) {
+            savedTodos[index].done = parentEl.classList.contains("done");
+            saveTodosToLocalStorage(savedTodos);
+        }
     }
 
     if (targetEl.classList.contains("remove-todo")) {
         parentEl.remove();
+        const savedTodos = getTodosFromLocalStorage();
+        saveTodosToLocalStorage(savedTodos.filter((t) => t.id !== todoId));
     }
 
     if (targetEl.classList.contains("edit-todo")) {
         toggleForms();
-        editInput.value = todoTitle;
-        oldInputValue = todoTitle;
+        editInput.value = parentEl.querySelector("h3").innerText;
+        oldId = todoId;
     }
 });
 
-// Cancelar edição
 cancelEditBtn.addEventListener("click", (e) => {
     e.preventDefault();
     toggleForms();
 });
 
-// Salvar edição
 editForm.addEventListener("submit", (e) => {
     e.preventDefault();
-
     const editInputValue = editInput.value.trim();
-
     if (editInputValue) {
         updateTodo(editInputValue);
     }
-
     toggleForms();
 });
 
-// Pesquisar
 searchInput.addEventListener("input", (e) => {
     searchTodos(e.target.value);
 });
 
-// Filtrar
 filterSelect.addEventListener("change", (e) => {
     filterTodos(e.target.value);
 });
+
+// Carregar tarefas ao abrir a página
+const loadTodos = () => {
+    const todos = getTodosFromLocalStorage();
+    todos.forEach((todo) => saveTodo(todo.text, todo.done, false, todo.id));
+};
+
+loadTodos();
